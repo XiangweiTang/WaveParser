@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31229.75
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WaveParser", "WaveParser\WaveParser.csproj", "{BA180BFB-7285-4391-88F5-5AE9580AE4B1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wave", "Wave\Wave.csproj", "{6DA6B601-4EBA-47AB-9890-B626C8213EFE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BA180BFB-7285-4391-88F5-5AE9580AE4B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BA180BFB-7285-4391-88F5-5AE9580AE4B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BA180BFB-7285-4391-88F5-5AE9580AE4B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BA180BFB-7285-4391-88F5-5AE9580AE4B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DA6B601-4EBA-47AB-9890-B626C8213EFE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DA6B601-4EBA-47AB-9890-B626C8213EFE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DA6B601-4EBA-47AB-9890-B626C8213EFE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DA6B601-4EBA-47AB-9890-B626C8213EFE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {53B557C3-4B39-429C-8DC8-C411B72C9878}
+	EndGlobalSection
+EndGlobal
