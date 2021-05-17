@@ -6,6 +6,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Data\Ensoniq-ZR-76-01-Dope-77.wav" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Data\Ensoniq-ZR-76-01-Dope-77.wav" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Wave\Wave.csproj" />
   </ItemGroup>
 

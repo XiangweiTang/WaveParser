@@ -7,25 +7,60 @@ namespace Wave
 {
     public class Wave
     {
-        #region Wave parameters
+        #region Basic wave parameters
+        /// <summary>
+        /// Type id defines which type of the wave is.
+        /// </summary>
         public short TypeId { get; set; } = 0;
+        /// <summary>
+        /// Type string is the wave type string, or name by human.
+        /// </summary>
         public string TypeString { get; set; } = "";
+        /// <summary>
+        /// How many channels are there. Typically mono or parallel.
+        /// Theoratically there are 7.1 Dubai audios...
+        /// </summary>
         public short NumChannels { get; set; } = 0;
+        /// <summary>
+        /// The sample rate, how many samples per seconds.
+        /// </summary>
         public int SampleRate { get; set; } = 0;
+        /// <summary>
+        /// The byte rate, how many bytes per second for this audio.
+        /// This number has already have "Sample rate"/"Number of channels"/"Audio bits" all together.
+        /// The number can be read in file info of OS.
+        /// e.g. you may found something like "256kbps", which is 32,000 KB per seconds(16K sample rate audio*16bits).
+        /// </summary>
         public int ByteRate { get; set; } = 0;
+        /// <summary>
+        /// How many bytes does a single group(all channels) of samples contain.
+        /// </summary>
         public short BlockAlign { get; set; } = 0;
+        /// <summary>
+        /// The precision of the audio. Typically 16bits or 65536, alaw and mulaw(ulaw) are 8K sample rate*8 bits(256).
+        /// </summary>
         public short BitsPerSample { get; set; } = 0;
+        /// <summary>
+        /// The lengthe of the audio in seconds. Can be directly calculated by [Length of data chunk]/[Byte rate].
+        /// </summary>
         public double AudioTime { get; set; } = 0;
+        /// <summary>
+        /// The binary of the data chunk.
+        /// </summary>
         public byte[] DataBytes
         {
             get
             {
-                // Only in deep parse mod, the data bytes will be read.
+                // Only in deep parse mod, the data bytes will be availible.
                 Sanity.Requires(IsDeep, "Only deep parse will generate the data bytes.");
                 return _DataBytes;
             }
         }
         private byte[] _DataBytes = new byte[0];
+        /// <summary>
+        /// RMS is root of mean square. It is typically used to assess the volumn(energy) of the sound.
+        /// RMS = Sqrt(( x_0^2 + x_1^2 + ... + x_(n-1)^2 ) / n )
+        /// </summary>
         public double RMS
         {
             get
@@ -47,47 +82,101 @@ namespace Wave
         }
         private double _RMS = -1;
         #endregion
+
+        #region Other Internal/Exteranl wave parameters.
+
+        /// <summary>
+        /// The list of the chunks.
+        /// </summary>
         public List<WaveChunk> ChunkList { get; set; } = new List<WaveChunk>();
+        /// <summary>
+        /// The format chunk.
+        /// </summary>
         public WaveChunk FormatChunk { get; set; }
+        /// <summary>
+        /// The data chunk.
+        /// </summary>
         public WaveChunk DataChunk { get; set; }
+        /// <summary>
+        /// Whether the wave type is supported in this code.
+        /// </summary>
         public bool IsSupportedWaveType { get; private set; } = true;
 
+        /// <summary>
+        /// Whether the audio is deep parsed(read every bytes of the data chunk).
+        /// </summary>
         private bool IsDeep = false;
+        /// <summary>
+        /// Whether the audio's data chunk has been reset or not.
+        /// </summary>
         private bool IsDataChanged = false;
+        /// <summary>
+        /// Most of the time, read the four bytes of text info into this array.
+        /// (In RIFF file, every chunk has a 4-bit long header for the chunk name.)
+        /// </summary>
         private byte[] ChunkNameBytes = new byte[4];
+        /// <summary>
+        /// Read the 32 bit integer into this array.
+        /// (In RIFF file, every chunk has a 4-bit long header for the chunk size.)
+        /// </summary>
         private byte[] Int32Bytes = new byte[4];
+        /// <summary>
+        /// Read the 16 bits integer into this array.
+        /// </summary>
         private byte[] Int16Bytes = new byte[2];
+        #endregion
 
         #region Entrance
+        /// <summary>
+        /// Deep parse the audio from a certain path.
+        /// </summary>
+        /// <param name="filePath">The path of the audio file.</param>
         public void DeepParse(string filePath)
         {
             Sanity.Requires(File.Exists(filePath), $"File not exist: {filePath}.");
             using(FileStream st=new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
+                // Call the deep parse stream to keep the core algorithm identical.
                 DeepParse(st);
             }
         }
+        /// <summary>
+        /// Deep parse the audio from a certain stream.
+        /// </summary>
+        /// <param name="st">The stream of the audio file.</param>
         public void DeepParse(Stream st)
         {            
-            ShallowParse(st);            
-            
-            st.Seek(DataChunk.ChunkOffset + 8, SeekOrigin.Begin);
+            // Call the shallow parse stream to keep the core algorithm identical.
+            ShallowParse(st);
+
+            // Then set the following to make it deep parse.
             _DataBytes = new byte[DataChunk.ChunkLength];
+            st.Seek(DataChunk.ChunkOffset + 8, SeekOrigin.Begin);
             st.Read(_DataBytes, 0, DataChunk.ChunkLength);
             IsDeep = true;
         }
+        /// <summary>
+        /// Shallow parse the audio from a certain path.
+        /// </summary>
+        /// <param name="filePath">The path of the audio file.</param>
         public void ShallowParse(string filePath)
         {
             Sanity.Requires(File.Exists(filePath), $"File not exist: {filePath}.");
             using(FileStream st=new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
+                // Call the shallow parse stream to keep the core algorithm identical.
                 ShallowParse(st);
             }
         }
+        /// <summary>
+        /// Shallow parse the audio from a certain stream.
+        /// </summary>
+        /// <param name="st">The stream of the audio file.</param>
         public void ShallowParse(Stream st)
         {
             IsDeep = false;
             IsDataChanged = true;
+            // Everything starts with parse RIFF.
             ParseRiff(st);
         }
         #endregion
@@ -102,7 +191,7 @@ namespace Wave
             Sanity.Requires(st.Length >= 44, $"The stream length {st.Length} is too short, should be at least 44.");
             // For safety, 2G file will not be supported.
             Sanity.Requires(st.Length <= int.MaxValue, $"The stream length {st.Length} is too long, at most 2G.");
-            
+
             // 0-3: RIFF.
             st.Read(ChunkNameBytes, 0, 4);
             Sanity.Requires(GetName() == "RIFF", "Invalid header, should be RIFF.");
@@ -115,7 +204,7 @@ namespace Wave
             st.Read(ChunkNameBytes, 0, 4);
             Sanity.Requires(GetName() == "WAVE", "Invalid header, should be WAVE");
 
-            // Clear the format chunk and data chunk..
+            // Clear the format chunk and data chunk.
             FormatChunk = InitEmptyChunk();
             DataChunk = InitEmptyChunk();            
 
@@ -147,6 +236,8 @@ namespace Wave
 
             // The chunk length should not exceed the end of the file.
             Sanity.Requires(st.Position + length <= st.Length, $"Stream length mismatch, at position {st.Position}, in chunk {name}.");
+            // Move forward.
+            st.Seek(length, SeekOrigin.Current);
 
             // Set the chunk.
             WaveChunk chunk = new WaveChunk
@@ -178,6 +269,7 @@ namespace Wave
 
             // Add this chunk into the list.
             ChunkList.Add(chunk);
+
 
             // Parse the next chunk recursively.
             ParseChunks(st);
@@ -239,23 +331,30 @@ namespace Wave
             switch (TypeId)
             {
                 case 1:
+                    // Pure PCM.
                     TypeString = "PCM";
                     return;
                 case 2:
+                    // ADPCM has some special ways of encoding the wave.
                     TypeString = "ADPCM";
                     IsSupportedWaveType = false;
                     return;
                 case 3:
+                    // Never saw this in practical.
                     TypeString = "IEEE";
                     IsSupportedWaveType = false;
                     return;
                 case 6:
+                    // ALaw and muLaw(uLaw) are generally the same with pure PCM.                    
                     TypeString = "ALAW";
                     return;
                 case 7:
                     TypeString = "MULAW";
                     return;
                 default:
+                    // There are other types. One of them is called Siren Wave.
+                    // Very few documents can be found on internet, Sox and Ffmpeg cannot deal with this.
+                    // A special decoder from MS can process it.
                     TypeString = "NA";
                     IsSupportedWaveType = false;
                     return;
@@ -283,6 +382,7 @@ namespace Wave
             };
         }
         #endregion
+
         #region Data chunk calculation.
         private double CalculateRMS()
         {
@@ -298,7 +398,7 @@ namespace Wave
                     n++;
                 }
             }
-            return Math.Sqrt((double)sqrSum / n);
+            return Math.Sqrt((double)sqrSum / n) / GetDivisor();
         }
 
         private Func<int,int> ReadDataToIntFunction()
@@ -316,6 +416,21 @@ namespace Wave
             }
         }
 
+        private int GetDivisor()
+        {
+            switch (BitsPerSample)
+            {
+                case 1:
+                    return 255;
+                case 2:
+                    return 65535;
+                case 4:
+                    return int.MaxValue;
+                default:
+                    throw new WaveException("Unsupported audio bits.");
+            }
+        }
+
         private IEnumerable<(int offset, int length)> ReadDataBytesToBuffer()
         {
             int bufferSize = 1_024 * BitsPerSample / 8;
@@ -328,11 +443,35 @@ namespace Wave
             }
         }
         #endregion
+
+        #region Other functions
+        public void OutputBasicInfo()
+        {
+            Console.WriteLine($"This wave type is:\t{TypeString}.");
+            Console.WriteLine($"Channel number:\t{NumChannels}");
+            Console.WriteLine($"Sample rate:\t{SampleRate}(samples/second)");
+            Console.WriteLine($"Byte rate:\t{ByteRate}(bytes/second)");
+            Console.WriteLine($"Audio precision:\t{BitsPerSample}(bits)");
+            Console.WriteLine($"Audio time:\t{AudioTime:0.000}(seconds)");
+        }
+        #endregion
     }
+    /// <summary>
+    /// Definition of wave chunk.
+    /// </summary>
     public struct WaveChunk
     {
+        /// <summary>
+        /// The name of the chunk.
+        /// </summary>
         public string ChunkName { get; set; }
+        /// <summary>
+        /// The offset of the chunk in the wave file.
+        /// </summary>
         public int ChunkOffset { get; set; }
+        /// <summary>
+        /// The length of the chunk.
+        /// </summary>
         public int ChunkLength { get; set; }
     }
 }
