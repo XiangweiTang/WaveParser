@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.Text;
 
@@ -44,6 +45,7 @@ namespace Wave
         /// The lengthe of the audio in seconds. Can be directly calculated by [Length of data chunk]/[Byte rate].
         /// </summary>
         public double AudioTime { get; set; } = 0;
+
         /// <summary>
         /// The binary of the data chunk.
         /// </summary>
@@ -183,7 +185,9 @@ namespace Wave
 
         #region Parse the file.
         private void ParseRiff(Stream st)
-        {          
+        {
+            // Whenever parse the RIFF, reset everything.
+            Init();
             // The first three blocks do not follow the rest.
             // (WAVE is not followed by size, and there is no hard definition of "WAVEfmt " are always together)
 
@@ -331,7 +335,7 @@ namespace Wave
             switch (TypeId)
             {
                 case 1:
-                    // Pure PCM.
+                    // Pure PCM. Typically 16 bit integer.
                     TypeString = "PCM";
                     return;
                 case 2:
@@ -339,16 +343,17 @@ namespace Wave
                     TypeString = "ADPCM";
                     IsSupportedWaveType = false;
                     return;
-                case 3:
-                    // Never saw this in practical.
-                    TypeString = "IEEE";
-                    IsSupportedWaveType = false;
+                case 3:                    
+                    // Typically 32 bit single precision float.
+                    TypeString = "IEEE_float";                    
                     return;
                 case 6:
                     // ALaw and muLaw(uLaw) are generally the same with pure PCM.                    
+                    // Typically 8 bit integer.
                     TypeString = "ALAW";
                     return;
                 case 7:
+                    // Typically 8 bit integer.
                     TypeString = "MULAW";
                     return;
                 default:
@@ -381,65 +386,96 @@ namespace Wave
                 ChunkLength = -1,
             };
         }
+        private void Init()
+        {
+            // Reset everything.
+            _RMS = -1;
+            _DataBytes = new byte[0];
+            TypeId = 0;
+            NumChannels = 0;
+            SampleRate = 0;
+            ByteRate = 0;
+            BlockAlign = 0;
+            BitsPerSample = 0;
+            AudioTime = 0;
+        }
         #endregion
 
         #region Data chunk calculation.
         private double CalculateRMS()
         {
-            long sqrSum = 0;
-            int n = 0;
-            Func<int, int> readToInt = ReadDataToIntFunction();
-            foreach(var buffer in ReadDataBytesToBuffer())
+            double squareSum = 0;
+            switch (TypeId)
             {
-                for (int i = buffer.offset; i < buffer.length; i += BitsPerSample)
-                {
-                    int v = readToInt(i);
-                    sqrSum += v * v;
-                    n++;
-                }
-            }
-            return Math.Sqrt((double)sqrSum / n) / GetDivisor();
-        }
-
-        private Func<int,int> ReadDataToIntFunction()
-        {
-            switch (BitsPerSample)
-            {
+                // Use individual calculation.
+                // A little worried about the efficiency of float point calculation.
                 case 1:
-                    return x => _DataBytes[x];
-                case 2:
-                    return x => BitConverter.ToInt16(_DataBytes, x);
-                case 4:
-                    return x => BitConverter.ToInt32(_DataBytes, x);
+                    squareSum = ReadDataToShort().Sum(x => x * x);
+                    break;
+                case 3:
+                    squareSum = ReadDataToSingle().Sum(x => x * x);
+                    break;
+                case 6:
+                case 7:
+                    squareSum = ReadDataToSByte().Sum(x => x * x);
+                    break;
                 default:
-                    throw new WaveException("Unsupported audio bits.");
+                    throw new WaveException("Unsupported type.");
             }
+            int n = DataChunk.ChunkLength / (BitsPerSample / 8);
+            return Math.Sqrt(squareSum / n);
+        }        
+
+        private IEnumerable<sbyte> ReadDataToSByte()
+        {            
+            return ReadToBuffer().SelectMany(x => ReadBufferToSByte(x));            
         }
 
-        private int GetDivisor()
+        private IEnumerable<short> ReadDataToShort()
         {
-            switch (BitsPerSample)
-            {
-                case 1:
-                    return 255;
-                case 2:
-                    return 65535;
-                case 4:
-                    return int.MaxValue;
-                default:
-                    throw new WaveException("Unsupported audio bits.");
-            }
+            return ReadToBuffer().SelectMany(x => ReadBufferToInt16(x));
         }
 
-        private IEnumerable<(int offset, int length)> ReadDataBytesToBuffer()
+        private IEnumerable<float> ReadDataToSingle()
         {
-            int bufferSize = 1_024 * BitsPerSample / 8;
-            for(int offset = 0; offset < _DataBytes.Length; offset += bufferSize)
+            return ReadToBuffer().SelectMany(x => ReadBufferToSingle(x));
+        }
+
+        private sbyte[] ReadBufferToSByte(byte[] bytes)
+        {
+            sbyte[] sbyteArray = new sbyte[bytes.Length];
+            for (int i = 0; i < bytes.Length; i++)
+                sbyteArray[i] = (sbyte)bytes[i];
+            return sbyteArray;
+        }
+        private short[] ReadBufferToInt16(byte[] bytes)
+        {
+            short[] shortArray = new short[bytes.Length / 2];
+            for (int i = 0; i < bytes.Length; i += 2)
+                shortArray[i / 2] = BitConverter.ToInt16(bytes, i);
+            return shortArray;
+        }
+        private float[] ReadBufferToSingle(byte[] bytes)
+        {
+            float[] singleArray = new float[bytes.Length / 4];
+            for (int i = 0; i < bytes.Length; i += 4)
+                singleArray[i / 4] = BitConverter.ToSingle(bytes, i);
+            return singleArray;
+        }
+
+        private IEnumerable<byte[]> ReadToBuffer()
+        {
+            return ReadToBuffer(1024 * BlockAlign);
+        }
+        private IEnumerable<byte[]> ReadToBuffer(int bufferLength)
+        {
+            for(int i = 0; i < DataBytes.Length; i += bufferLength)
             {
-                int length = offset + bufferSize <= _DataBytes.Length
-                    ? bufferSize
-                    : _DataBytes.Length - offset;
-                yield return (offset, length);
+                byte[] bytes = new byte[bufferLength];
+                if (bufferLength > DataBytes.Length - i)
+                    bytes = new byte[bytes.Length - i];
+                Array.Copy(DataBytes, i, bytes, 0, bytes.Length);
+                yield return bytes;
             }
         }
         #endregion
